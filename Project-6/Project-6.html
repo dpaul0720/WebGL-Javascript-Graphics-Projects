@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+    
+attribute vec3 vPosition;
+attribute vec3 vNormal;
+attribute vec2 aTextureCoord;
+uniform mat4 mvpMatrix;
+uniform mat4 mvMatrix;
+uniform mat3 normalMatrix;
+uniform float shininess;
+uniform vec4 lightPosition;
+
+uniform vec4 ambientProduct;
+uniform vec4 diffuseProduct;
+uniform vec4 specularProduct;
+varying vec4 fColor;
+varying vec2 vTextureCoord;
+uniform bool uUseLighting;
+
+
+
+void
+main()
+{
+	gl_Position = mvpMatrix * vec4(vPosition, 1.0);
+	vTextureCoord = aTextureCoord;
+	if(!uUseLighting){
+		fColor = vec4(vec3(1.0,1.0,1.0),1.0);
+	}
+	else{
+		vec3 pos = (mvMatrix * vec4(vPosition,1.0)).xyz;
+		vec3 light = lightPosition.xyz;
+		vec3 L = normalize( light - pos );
+		vec3 E = normalize( -pos ); // eye is at (0, 0, 0)
+		vec4 NN = vec4(vNormal,0); // normalized normal
+		vec3 N = normalize( (mvMatrix * NN).xyz );
+		vec3 R = normalize(-reflect(L, N));
+		//ambient
+		vec4 ambient = ambientProduct;
+		float Kd = max( dot(L, N), 0.0 );
+		//diffuse
+		vec4 diffuse = Kd*diffuseProduct;
+
+		// specular
+		float Ks = pow( max(dot(E, R), 0.0), shininess );
+		vec4 specular = Ks*specularProduct;
+		if( dot(L, N) < 0.0 )
+			specular = vec4(0.0, 0.0, 0.0, 1.0);
+
+		fColor = ambient + diffuse + specular;
+		fColor.a = 1.0; // opacity
+	}
+
+}
+
+</script>
+
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 fColor;
+uniform vec3 vColor;
+
+varying vec2 vTextureCoord;
+uniform sampler2D uSampler;
+
+void
+main()
+{
+	//gl_FragColor = fColor*texture2D(uSampler, vTextureCoord) * vec4( vColor, 1.0 );
+	gl_FragColor = fColor*texture2D(uSampler, vTextureCoord);
+	//gl_FragColor = fColor * vec4( vColor, 1.0 );
+}
+
+</script>
+
+<script type="text/javascript" src="../Common/webgl-utils.js"></script>
+<script type="text/javascript" src="../Common/initShaders.js"></script>
+<script type="text/javascript" src="../Common/MV.js"></script>
+<script type="text/javascript" src="trackball.js"></script>
+<script type="text/javascript" src="Project-6.js"></script>
+</head>
+
+<body>
+<canvas id="gl-canvas" width="1024" height="512">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+
+<br><br>
+<button id = "Increase">Inc DPF</button>
+<button id = "Decrease">Dec DPF</button>
+
+<form>
+    <input type="radio" name="function" id="orbon" checked>Orbit On
+    <input type="radio" name="function" id="orboff">Orbit Off
+</form>
+
+<form>
+    <input type="radio" name="function" id="dayon" checked>Day On
+    <input type="radio" name="function" id="dayoff">Day Off
+</form>
+<form>
+    <input type="radio" name="function" id="anion" checked>Animation On
+    <input type="radio" name="function" id="anioff">Animation Off
+</form>
+
+<div>
+Red  0 <input id="redslid" type="range"
+ min="0" max="1" step=".1" value="1" />
+ 1
+</div>
+
+<div>
+Green  0 <input id="greenslid" type="range"
+ min="0" max="1" step=".1" value="1" />
+ 1
+</div>
+
+<div>
+Blue  0 <input id="blueslid" type="range"
+ min="0" max="1" step=".1" value="1" />
+ 1
+</div>
+
+
+
+<!--- The statistics are printed here. --->
+<p id="printDay"></p>
+
+</body>
+</html>

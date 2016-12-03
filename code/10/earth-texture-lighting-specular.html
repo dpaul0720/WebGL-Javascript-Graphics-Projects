@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+
+attribute vec3 aVertexPosition;
+attribute vec3 aVertexNormal;
+attribute vec2 aTextureCoord;
+uniform mat4 mvpMatrix;
+uniform mat4 mvMatrix;
+uniform mat3 nMatrix;
+
+uniform vec3 uAmbientColor;
+uniform vec3 uLightPosition;
+uniform vec3 uLightColor;
+
+uniform bool uUseLighting;
+
+varying vec2 vTextureCoord;
+varying vec3 vLightWeighting;
+
+void main(void) {
+    gl_Position = mvpMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = aTextureCoord;
+    
+    if (!uUseLighting) {
+        vLightWeighting = vec3(1.0, 1.0, 1.0);
+    } else {
+        vec4 eyePosition = mvMatrix * vec4(aVertexPosition, 1.0); // vertex position in the eye space
+        vec4 eyeLightPos = mvMatrix * vec4(uLightPosition, 1.0); // light position in the eye space
+        //vec4 eyeLightPos = vec4(0.0, 0.0, 10.0, 1.0); // fixed light position in the eye space, alway pointing to the earth
+        vec3 eyeNormalVector = normalize(nMatrix * aVertexNormal); // vertex normal in the eye space
+        vec3 eyeLightVector = normalize(eyeLightPos.xyz - eyePosition.xyz);
+        
+        vec3 eyeViewVector = -normalize(eyePosition.xyz); // eye position is at (0, 0, 0) in the eye space
+        vec3 eyeReflectVector = -reflect(eyeLightVector, eyeNormalVector);
+        
+        float diffuse = max(dot(eyeNormalVector, eyeLightVector), 0.0);
+        float shininess = 32.0;
+        float specular = pow(max(dot(eyeViewVector, eyeReflectVector),0.0), shininess);;
+        vLightWeighting = uAmbientColor + uLightColor * diffuse + uLightColor * specular;
+    }
+}
+
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+
+varying vec2 vTextureCoord;
+varying vec3 vLightWeighting;
+
+uniform sampler2D uSampler;
+
+void main(void) {
+    vec4 textureColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    //gl_FragColor = vec4(vLightWeighting, 1.0);
+    gl_FragColor = vec4(textureColor.rgb * vLightWeighting, textureColor.a);
+}
+
+</script>
+
+<script type="text/javascript" src="../Common/webgl-utils.js"></script>
+<script type="text/javascript" src="../Common/initShaders.js"></script>
+<script type="text/javascript" src="../Common/MV.js"></script>
+<script type="text/javascript" src="trackball.js"></script>
+<script type="text/javascript" src="earth-texture-lighting-specular.js"></script>
+
+<body>
+<canvas id="gl-canvas" width="512" height="512">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+
+<p>
+
+<input id="lighting" checked="checked" type="checkbox"> Use lighting<br><br>
+    
+    <b>Point light:</b>
+    
+    <table style="border: 0; padding: 10px;">
+        <tbody><tr>
+            <td>Position:
+            </td><td>X: <input id="lightPositionX" value="1.0" type="text">
+                </td><td>Y: <input id="lightPositionY" value="1.0" type="text">
+                    </td><td>Z: <input id="lightPositionZ" value="10.0" type="text">
+                        </td></tr>
+        <tr>
+            <td>Color:
+            </td><td>R: <input id="lightR" value="0.8" type="text">
+                </td><td>G: <input id="lightG" value="0.8" type="text">
+                    </td><td>B: <input id="lightB" value="0.8" type="text">
+                        </td></tr>
+        </tbody></table>
+    
+    
+    <b>Ambient light:</b>
+    
+    <table style="border: 0; padding: 10px;">
+        <tbody><tr>
+            <td>Color:
+            </td><td>R: <input id="ambientR" value="0.2" type="text">
+                </td><td>G: <input id="ambientG" value="0.2" type="text">
+                    </td><td>B: <input id="ambientB" value="0.2" type="text">
+                        </td></tr>
+        </tbody></table>
+    <br>
+
+</body>
+</html>

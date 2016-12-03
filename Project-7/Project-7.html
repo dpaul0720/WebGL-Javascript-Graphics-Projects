@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+    
+attribute vec3 a_Position;
+attribute vec2 a_TexCoord;
+
+uniform mat4 u_MvpMatrix;
+uniform mat4 u_MvMatrix;
+uniform mat3 u_MvMatrix_3by3;
+varying vec2 v_TexCoord;
+
+// these attributes will be used for lighting
+
+// object space normals computed from sphere
+// you need to transform it into eye space
+// and passing down the fragment shader for
+// per-fragment lighting in the eye space
+attribute vec3 a_Normal;
+uniform vec4 lightPosition;
+varying vec3 N; 
+varying vec3 L;
+varying vec3 E;
+
+// object space tangent and bitangent
+// you need to transform them into eye space
+// using u_MvMatrix_3by3
+// and use them to create TBN frame
+// (along with eye-space normal)
+attribute vec3 a_Tangent;
+attribute vec3 a_Bitangent;
+varying vec3 v_LightDirectionTS;
+varying vec3 v_EyeDirectionTS;
+
+
+
+void
+main()
+{
+    vec3 pos = (u_MvMatrix * vec4(a_Position, 1.0)).xyz;
+    if(lightPosition.w == 0.0){
+        // vector, light is directional light
+        L = normalize(lightPosition.xyz);
+    }
+    else{
+        // point, light is point light
+        L = normalize( lightPosition.xyz - pos );
+    }
+
+    N = normalize(u_MvMatrix_3by3*a_Normal);
+    E =  -normalize(pos);
+
+    gl_Position = u_MvpMatrix * vec4(a_Position, 1.0);
+    v_TexCoord = a_TexCoord;
+
+
+
+    //Normal Map Code Below
+
+
+    vec3 vertexTangentES = u_MvMatrix_3by3 * a_Tangent;
+    vec3 vertexBitangentES = u_MvMatrix_3by3 * a_Bitangent;
+    vec3 vertexNormalES = u_MvMatrix_3by3 * a_Normal;
+
+    mat3 TBN = mat3(
+        vec3(vertexTangentES.x, vertexBitangentES.x, vertexNormalES.x),
+        vec3(vertexTangentES.y, vertexBitangentES.y, vertexNormalES.y),
+        vec3(vertexTangentES.z, vertexBitangentES.z, vertexNormalES.z)
+    );
+
+    v_LightDirectionTS = TBN * L;
+    v_EyeDirectionTS = TBN * E;
+
+
+
+
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+
+precision mediump float;
+
+uniform vec4 ambientProduct;
+uniform vec4 diffuseProduct;
+uniform vec4 specularProduct;
+uniform float shininess;
+
+varying vec3 N; 
+varying vec3 L;
+varying vec3 E;
+
+// orange texture
+uniform sampler2D u_Sampler;
+
+// orange normal map
+// use texture lookup to get tangent space normal
+uniform sampler2D u_SamplerNormal;
+
+varying vec2 v_TexCoord;
+
+varying vec3 v_LightDirectionTS;
+varying vec3 v_EyeDirectionTS;
+
+uniform int u_button;
+
+void
+main()
+{
+    //Normal Map Code
+
+    vec3 v_NormalDirectionTS = texture2D(u_SamplerNormal, v_TexCoord).rgb;
+    v_NormalDirectionTS = v_NormalDirectionTS*2.0 - 1.0;
+
+
+    // Phong lighting for tangent space
+    vec4 pColor;
+    vec3 TNN, TNL, TNE;
+    TNN = normalize(v_NormalDirectionTS); // normalize per-fragment
+    TNL = normalize(v_LightDirectionTS); // normalize per-fragment
+    TNE = normalize(v_EyeDirectionTS); // normalize per-fragment
+
+    vec3 TR = normalize(-reflect(TNL, TNN));
+    // compute terms in the illumination equation
+    // ambient
+    vec4 ambientT = ambientProduct;
+    
+    // diffuse
+    float TKd = max( dot(TNL, TNN), 0.0 );
+    vec4 diffuseT = TKd*diffuseProduct;
+    
+    // specular
+    float TKs = pow( max(dot(TNE, TR), 0.0), shininess );
+    vec4 specularT = TKs * specularProduct;
+    if( dot(TNL, TNN) < 0.0 ){
+        specularT = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+    pColor = ambientT + diffuseT + specularT;
+    pColor.a = 1.0; // opacity
+
+
+    // Just the Lighting
+    vec4 fColor;
+    vec3 NN, NL, NE;
+    NN = normalize(N); // normalize per-fragment N
+    NL = normalize(L); // normalize per-fragment L
+    NE = normalize(E); // normalize per-fragment E
+    
+    vec3 R = normalize(-reflect(NL, NN));
+    // compute terms in the illumination equation
+    // ambient
+    vec4 ambient = ambientProduct;
+    
+    // diffuse
+    float Kd = max( dot(NL, NN), 0.0 );
+    vec4 diffuse = Kd*diffuseProduct;
+    
+    // specular
+    float Ks = pow( max(dot(NE, R), 0.0), shininess );
+    vec4 specular = Ks * specularProduct;
+    if( dot(NL, NN) < 0.0 ){
+        specular = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+    fColor = ambient + diffuse + specular;
+    fColor.a = 1.0; // opacity
+
+
+    vec3 textureColor;
+    
+    textureColor = texture2D(u_Sampler, v_TexCoord).rgb;
+    
+    if(u_button == 0){
+        gl_FragColor = vec4(textureColor, 1.0);
+    }
+    else if(u_button == 1){
+        gl_FragColor = fColor * vec4(textureColor, 1.0);
+    }
+    else if(u_button == 2){
+        gl_FragColor = fColor * pColor * vec4(textureColor, 1.0);
+    }
+}
+</script>
+
+<script type="text/javascript" src="../Common/webgl-utils.js"></script>
+<script type="text/javascript" src="../Common/initShaders.js"></script>
+<script type="text/javascript" src="../Common/MV.js"></script>
+<script type="text/javascript" src="orange-objParser.js"></script>
+<script type="text/javascript" src="Project-7.js"></script>
+</head>
+
+<body>
+<canvas id="gl-canvas" width="512" height="512">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+
+<br><br>
+
+<form>
+    <input type="radio" name="function" id="Text">Texture
+    <input type="radio" name="function" id="TextLight">Texture + Lighting
+    <input type="radio" name="function" id="TextLightNorm" checked>Texture + Lighting + Normal Map
+</form>
+
+</body>
+</html>
